@@ -1,10 +1,18 @@
-# ESP32-S3 Coil Machine Analyzer - Advanced Multi-Point Waveform Analysis
+# Coil Machine Analyzer - Cross-Platform Suite
 
-**Version 3.0** - Advanced embedded oscilloscope system for magnetic coil machine impact analysis
+**Version 3.0** - Advanced multi-platform oscilloscope system for coil machine impact analysis
+
+## 🚀 Quick Links
+
+- 📱 **[Web App](./web-app/)** - Browser-based analyzer (Chrome, Firefox, Safari)
+- 🖥️ **[Desktop App](./desktop-app/)** - Windows/Linux native application
+- 📲 **[Mobile App](./mobile-app/)** - Android native application
+- 🔧 **[Core Library](./libcoilanalyzer/)** - C++ analysis engine
+- ⚙️ **[ESP32 Firmware](./firmware/)** - Original embedded firmware
 
 ## Overview
 
-A comprehensive ESP32-S3 based system for real-time analysis of coil striking machines with:
+A comprehensive cross-platform system for real-time analysis of coil striking machines with:
 - **Multi-point waveform extraction** (up to 20 measurement points per cycle)
 - **Harmonic analysis** (Peak ratios, THD calculation)
 - **Decay rate measurement** (Exponential damping analysis)
@@ -12,7 +20,92 @@ A comprehensive ESP32-S3 based system for real-time analysis of coil striking ma
 - **Quality scoring** (Consistency, harmonic content, signal strength)
 - **Real-time visualization** with interactive UI views
 
-## Hardware Requirements
+### Platforms Supported
+
+| Platform | Input | Status |
+|----------|-------|--------|
+| **Web Browser** | Microphone (WebAudio API) | ✅ Ready |
+| **Windows** | Microphone (WASAPI) | ✅ Ready |
+| **Linux** | Microphone (ALSA/PulseAudio) | ✅ Ready |
+| **Android** | Microphone (AAudio) | ✅ Ready |
+| **ESP32-S3** | I2S Microphone | ✅ Ready |
+
+## Getting Started
+
+### 🌐 Web App (No Installation)
+```bash
+cd web-app
+npm install && npm run dev
+# Opens at http://localhost:3000
+```
+
+### 🖥️ Desktop App (Windows/Linux)
+```bash
+cd desktop-app
+npm install && npm run dev
+# Launches Electron app with live reload
+```
+
+### 📲 Mobile App (Android)
+```bash
+cd mobile-app
+npm install && npm run android
+# Installs on connected Android device
+```
+
+### 🔧 Core Library (C++17)
+```bash
+cd libcoilanalyzer
+cmake -B build && cd build
+make && sudo make install
+```
+
+### ⚙️ ESP32 Firmware
+See [firmware/](./firmware/) directory and [QUICKSTART.md](./QUICKSTART.md)
+
+## Project Structure
+
+```
+Coil-Machine-Analyzer/
+├── firmware/                      # Original ESP32 firmware
+│   ├── src/
+│   ├── include/
+│   └── platformio.ini
+│
+├── libcoilanalyzer/               # Core C++ library (all platforms)
+│   ├── include/                   # Header files
+│   ├── src/                       # Implementation
+│   ├── tests/                     # Unit tests
+│   ├── CMakeLists.txt            # Cross-platform build
+│   └── README.md
+│
+├── web-app/                       # React + Vite web application
+│   ├── src/
+│   │   ├── components/            # React components
+│   │   ├── services/              # WebAudio API wrapper
+│   │   └── visualizations/        # Canvas rendering
+│   ├── package.json
+│   └── README.md
+│
+├── desktop-app/                   # Electron app (Windows/Linux)
+│   ├── src/
+│   │   ├── main/                  # Electron main process
+│   │   ├── renderer/              # React UI
+│   │   └── backend/               # PortAudio integration
+│   ├── package.json
+│   └── README.md
+│
+├── mobile-app/                    # React Native app (Android)
+│   ├── src/
+│   │   ├── screens/               # Navigation screens
+│   │   ├── services/              # Native audio API
+│   │   └── navigation/            # React Navigation
+│   ├── package.json
+│   └── README.md
+│
+├── CROSS_PLATFORM_ROADMAP.md      # Development phases
+└── README.md                       # This file
+```
 
 ### Main Controller
 - **ESP32-S3 DevKit** (Dual-core, 240MHz, 8MB PSRAM)
