@@ -1,0 +1,1 @@
+/usr/bin/c++ -Wl,--dependency-file=CMakeFiles/coil_analyzer_core_tests.dir/link.d CMakeFiles/coil_analyzer_core_tests.dir/tests/test_core.cpp.o -o coil_analyzer_core_tests  libcoil_analyzer_core.a
