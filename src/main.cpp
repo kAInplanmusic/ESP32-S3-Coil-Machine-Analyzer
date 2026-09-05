@@ -3,23 +3,22 @@
 #include "i2s_audio.h"
 #include "signal_processor.h"
 #include "display_manager.h"
-#include "impact_analyzer.h"
-#include "measurement_ui.h"
+#include "advanced_impact_analyzer.h"
+#include "advanced_measurement_ui.h"
 
-static const char* TAG = "CoilAnalyzer";
+static const char* TAG = "CoilAnalyzer_Advanced";
 
 // Global objects
 I2SAudio audio;
 SignalProcessor processor;
 DisplayManager display;
-ImpactAnalyzer impactAnalyzer;
-MeasurementUI measurementUI;
+AdvancedImpactAnalyzer advancedAnalyzer;
+AdvancedMeasurementUI advancedUI;
 
 // Task handles
 TaskHandle_t audioTaskHandle = nullptr;
 TaskHandle_t processingTaskHandle = nullptr;
 TaskHandle_t displayTaskHandle = nullptr;
-TaskHandle_t uiTaskHandle = nullptr;
 
 // Ring buffer for audio samples
 static const size_t SAMPLE_BUFFER_SIZE = 4096;
@@ -27,25 +26,27 @@ int16_t sampleBuffer[SAMPLE_BUFFER_SIZE];
 uint32_t sample_index = 0;
 
 // Global measurement state
-struct MeasurementState {
+struct SystemState {
     float currentCPS = 0.0f;
     uint8_t qualityScore = 0;
     bool isRecording = false;
     unsigned long recordingStartTime = 0;
-} measurementState;
+} systemState;
 
-// Task: Audio capture from I2S
+/**
+ * Task: Audio capture from I2S microphone
+ * Priority: HIGH (Core 0)
+ */
 void audioCaptureTask(void* pvParameters) {
+    ESP_LOGI(TAG, "Audio capture task started on Core 0");
+    
     while (1) {
         size_t samples_read = audio.readSamples(sampleBuffer, SAMPLE_BUFFER_SIZE);
         
         if (samples_read > 0) {
-            // Process samples through impact analyzer
+            // Process samples through advanced analyzer (multi-point waveform analysis)
             for (size_t i = 0; i < samples_read; i++) {
-                // Feed to impact analyzer (3-point analysis)
-                impactAnalyzer.processSample(sampleBuffer[i], sample_index + i);
-                
-                // Also process for general signal analysis
+                advancedAnalyzer.processSample(sampleBuffer[i], sample_index + i);
                 processor.processSamples(&sampleBuffer[i], 1);
             }
             sample_index += samples_read;
@@ -65,30 +66,42 @@ void audioCaptureTask(void* pvParameters) {
     }
 }
 
-// Task: Measurement and CPS calculation
+/**
+ * Task: Measurement processing and statistics calculation
+ * Priority: MEDIUM (Core 1)
+ */
 void measurementTask(void* pvParameters) {
+    ESP_LOGI(TAG, "Measurement task started on Core 1");
+    
     while (1) {
-        // Get current measurement state
-        if (impactAnalyzer.isMeasuring()) {
-            // Update CPS and quality from impact analyzer
-            measurementState.currentCPS = impactAnalyzer.getCPS();
-            const auto& stats = impactAnalyzer.getStats();
-            measurementState.qualityScore = stats.quality_score;
+        // Get current state from advanced analyzer
+        if (advancedAnalyzer.isMeasuring()) {
+            systemState.currentCPS = advancedAnalyzer.getCPS();
+            const auto& stats = advancedAnalyzer.getStats();
+            systemState.qualityScore = stats.quality_score;
         } else {
-            // Fallback to signal processor calculation
-            measurementState.currentCPS = processor.calculateCPS(2.0f);
+            systemState.currentCPS = processor.calculateCPS(2.0f);
             processor.updateQualityScore();
-            measurementState.qualityScore = processor.getQualityScore();
+            systemState.qualityScore = processor.getQualityScore();
         }
         
         // Log to serial (debug)
-        if (LOG_SERIAL && impactAnalyzer.isMeasuring()) {
+        if (LOG_SERIAL && advancedAnalyzer.isMeasuring()) {
             static unsigned long last_log = 0;
-            if (millis() - last_log > 1000) {
-                Serial.printf("CPS: %.2f | Quality: %d%% | Progress: %d%%\n",
-                             measurementState.currentCPS,
-                             measurementState.qualityScore,
-                             impactAnalyzer.getMeasurementProgress());
+            if (millis() - last_log > 2000) {
+                const auto& stats = advancedAnalyzer.getStats();
+                Serial.printf("[MEASURE] CPS: %.2f | Quality: %d%% | Progress: %d%% | Waveforms: %d\n",
+                             systemState.currentCPS,
+                             systemState.qualityScore,
+                             advancedAnalyzer.getMeasurementProgress(),
+                             stats.samples_collected);
+                
+                if (stats.samples_collected > 0) {
+                    Serial.printf("          Mean H2/H1: %.2f | Mean H3/H1: %.2f | Decay: %.4f\n",
+                                 stats.mean_harmonic_2_1,
+                                 stats.mean_harmonic_3_1,
+                                 stats.mean_decay_rate);
+                }
                 last_log = millis();
             }
         }
@@ -97,102 +110,106 @@ void measurementTask(void* pvParameters) {
     }
 }
 
-// Task: Display update
+/**
+ * Task: Display update
+ * Priority: LOW (Core 1)
+ */
 void displayUpdateTask(void* pvParameters) {
+    ESP_LOGI(TAG, "Display update task started on Core 1");
+    
     while (1) {
-        // Update measurement UI
-        measurementUI.update();
-        
+        advancedUI.update();
         vTaskDelay(pdMS_TO_TICKS(UI_UPDATE_INTERVAL));
     }
 }
 
+/**
+ * Initialize all systems
+ */
 void setup() {
     // Initialize serial communication
     Serial.begin(SERIAL_BAUD_RATE);
     delay(1000);
     
     Serial.println("\n\n=====================================");
-    Serial.println("ESP32-S3 Coil Machine Analyzer v2.0");
-    Serial.println("3-Point Impact Analysis (0-250 CPS)");
+    Serial.println("ESP32-S3 Coil Machine Analyzer v3.0");
+    Serial.println("Advanced Multi-Point Waveform Analysis");
+    Serial.println("0-250 CPS with Harmonic Analysis");
     Serial.println("=====================================");
     Serial.printf("Build: %s %s\n", __DATE__, __TIME__);
     Serial.printf("Sample Rate: %d Hz\n", SAMPLE_RATE);
-    Serial.printf("FFT Size: %d\n", FFT_SIZE);
+    Serial.printf("FFT Size: %d (Resolution: %.2f Hz/bin)\n", FFT_SIZE, FFT_FREQ_RESOLUTION);
     Serial.printf("CPS Range: %.0f - %.0f\n", CPS_MIN, CPS_MAX);
+    Serial.printf("Measurement: 100 impact cycles\n");
     Serial.println();
     
-    // Initialize display
+    // ========== DISPLAY INITIALIZATION ==========
     Serial.println("[INIT] Initializing display...");
     if (!display.init()) {
         Serial.println("[ERROR] Display initialization failed!");
-        while (1) {
-            delay(1000);
-        }
+        while (1) delay(1000);
     }
     display.drawInitScreen();
-    Serial.println("[OK] Display initialized");
+    Serial.println("[OK] Display initialized (480x320 TFT)");
     delay(500);
     
-    // Initialize audio
+    // ========== AUDIO INITIALIZATION ==========
     Serial.println("[INIT] Initializing audio input...");
     if (!audio.init() || !audio.start()) {
         Serial.println("[ERROR] Audio initialization failed!");
         display.drawError("Audio Error", "Microphone init failed!");
-        while (1) {
-            delay(1000);
-        }
+        while (1) delay(1000);
     }
-    Serial.println("[OK] Audio input initialized");
+    Serial.println("[OK] Audio input initialized (I2S, 44.1 kHz, Mono)");
     delay(500);
     
-    // Calibrate microphone
+    // ========== AUDIO CALIBRATION ==========
     Serial.println("[INIT] Calibrating microphone...");
+    display.drawInitScreen();
     delay(1000);
     audio.calibrateReference();
     Serial.printf("[OK] Calibration complete. Gain: %.2f dB\n", audio.getGain());
     delay(500);
     
-    // Initialize signal processor
+    // ========== SIGNAL PROCESSOR INITIALIZATION ==========
     Serial.println("[INIT] Initializing signal processor...");
     if (!processor.init()) {
         Serial.println("[ERROR] Signal processor initialization failed!");
         display.drawError("Processor Error", "Signal init failed!");
-        while (1) {
-            delay(1000);
-        }
+        while (1) delay(1000);
     }
-    Serial.println("[OK] Signal processor initialized");
+    Serial.println("[OK] Signal processor initialized (FFT, Peak detection)");
     delay(500);
     
-    // Initialize impact analyzer (3-point analysis)
-    Serial.println("[INIT] Initializing impact analyzer...");
-    if (!impactAnalyzer.init()) {
-        Serial.println("[ERROR] Impact analyzer initialization failed!");
-        display.drawError("Analyzer Error", "Impact analysis failed!");
-        while (1) {
-            delay(1000);
-        }
+    // ========== ADVANCED IMPACT ANALYZER INITIALIZATION ==========
+    Serial.println("[INIT] Initializing Advanced Impact Analyzer...");
+    if (!advancedAnalyzer.init(12)) {  // 12 measurement points max
+        Serial.println("[ERROR] Advanced analyzer initialization failed!");
+        display.drawError("Analyzer Error", "Waveform analysis failed!");
+        while (1) delay(1000);
     }
     // Set microphone position
-    impactAnalyzer.setMicrophonePosition(MICROPHONE_DISTANCE_MM, MICROPHONE_ANGLE_DEG);
-    Serial.printf("[OK] Impact analyzer initialized (%.0f mm, %.0f°)\n",
-                 MICROPHONE_DISTANCE_MM, MICROPHONE_ANGLE_DEG);
+    advancedAnalyzer.setMicrophonePosition(MICROPHONE_DISTANCE_MM, MICROPHONE_ANGLE_DEG);
+    Serial.printf("[OK] Advanced analyzer initialized (multi-point waveform)\n");
+    Serial.printf("     Microphone: %.0f mm, %.0f°\n", MICROPHONE_DISTANCE_MM, MICROPHONE_ANGLE_DEG);
     delay(500);
     
-    // Initialize measurement UI
-    Serial.println("[INIT] Initializing measurement UI...");
-    if (!measurementUI.init(&display, &impactAnalyzer)) {
+    // ========== ADVANCED MEASUREMENT UI INITIALIZATION ==========
+    Serial.println("[INIT] Initializing Advanced Measurement UI...");
+    if (!advancedUI.init(&display, &advancedAnalyzer)) {
         Serial.println("[ERROR] UI initialization failed!");
         display.drawError("UI Error", "Measurement UI failed!");
-        while (1) {
-            delay(1000);
-        }
+        while (1) delay(1000);
     }
-    Serial.println("[OK] Measurement UI initialized");
+    Serial.println("[OK] Advanced Measurement UI initialized");
+    Serial.println("     - Waveform visualization");
+    Serial.println("     - Measurement point table");
+    Serial.println("     - Harmonic analysis");
+    Serial.println("     - Decay rate analysis");
+    Serial.println("     - Quality breakdown");
     delay(500);
     
-    // Create FreeRTOS tasks
+    // ========== FREERTOS TASK CREATION ==========
     Serial.println("[INIT] Creating FreeRTOS tasks...");
     
     xTaskCreatePinnedToCore(
@@ -204,6 +221,7 @@ void setup() {
         &audioTaskHandle,
         0   // Core 0
     );
+    Serial.println("     [OK] Audio capture task (Core 0, priority 3)");
     
     xTaskCreatePinnedToCore(
         measurementTask,
@@ -214,6 +232,7 @@ void setup() {
         &processingTaskHandle,
         1   // Core 1
     );
+    Serial.println("     [OK] Measurement task (Core 1, priority 2)");
     
     xTaskCreatePinnedToCore(
         displayUpdateTask,
@@ -222,37 +241,49 @@ void setup() {
         nullptr,
         1,  // Low priority
         &displayTaskHandle,
-        1
+        1   // Core 1
     );
+    Serial.println("     [OK] Display update task (Core 1, priority 1)");
     
-    Serial.println("[OK] All tasks created");
+    Serial.println();
     Serial.println("=====================================");
-    Serial.println("System ready! Waiting for START...");
+    Serial.println("System ready! Press START to begin...");
+    Serial.println("\nSerial Commands:");
+    Serial.println("  s - START measurement");
+    Serial.println("  r - RESET analyzer");
+    Serial.println("  c - CALIBRATE microphone");
+    Serial.println("  i - PRINT statistics");
+    Serial.println("  d - SET microphone distance");
+    Serial.println("  a - SET microphone angle");
+    Serial.println("  h - HELP");
+    Serial.println("=====================================");
     Serial.println();
 }
 
+/**
+ * Main loop - Handle serial commands and button input
+ */
 void loop() {
-    // Main loop - handle serial commands and button input
-    
-    // Check for serial commands
     if (Serial.available()) {
         char cmd = Serial.read();
         
         switch (cmd) {
             case 's':  // START measurement
-                Serial.println("[CMD] START button pressed");
-                measurementUI.handleStartButton();
+                Serial.println("[CMD] START - Beginning 100-cycle measurement...");
+                advancedAnalyzer.startMeasurement();
+                advancedUI.setState(AdvancedMeasurementUI::STATE_MEASURING);
                 break;
                 
-            case 'r':  // Reset
-                Serial.println("[CMD] Resetting analyzer...");
-                impactAnalyzer.reset();
-                measurementUI.setState(MeasurementUI::STATE_IDLE);
+            case 'r':  // RESET
+                Serial.println("[CMD] RESET - Clearing all data...");
+                advancedAnalyzer.reset();
+                advancedUI.setState(AdvancedMeasurementUI::STATE_IDLE);
                 break;
                 
-            case 'c':  // Calibrate microphone
-                Serial.println("[CMD] Recalibrating microphone...");
+            case 'c':  // CALIBRATE
+                Serial.println("[CMD] CALIBRATE - Recalibrating microphone...");
                 audio.calibrateReference();
+                Serial.printf("     Gain: %.2f dB\n", audio.getGain());
                 break;
                 
             case '+':  // Increase gain
@@ -271,49 +302,100 @@ void loop() {
                 }
                 break;
                 
-            case 'd':  // Adjust microphone distance
+            case 'i':  // Print statistics
                 {
-                    float dist = MICROPHONE_DISTANCE_MM;
-                    Serial.printf("[CMD] Current distance: %.0f mm\n", dist);
-                    Serial.println("[CMD] Enter new distance (10-500 mm)");
-                }
-                break;
-                
-            case 'a':  // Adjust microphone angle
-                {
-                    float angle = MICROPHONE_ANGLE_DEG;
-                    Serial.printf("[CMD] Current angle: %.0f°\n", angle);
-                    Serial.println("[CMD] Enter new angle (-180 to 180°)");
-                }
-                break;
-                
-            case 'i':  // Print current stats
-                {
-                    const auto& stats = impactAnalyzer.getStats();
-                    Serial.println("\n[STATS] Current Measurement:");
-                    Serial.printf("  CPS: %.2f\n", stats.cps_calculated);
-                    Serial.printf("  Quality: %d%%\n", stats.quality_score);
-                    Serial.printf("  Consistency: %.1f%%\n", stats.consistency_percent);
-                    Serial.printf("  Samples: %d\n", stats.samples_collected);
-                    Serial.printf("  Mean Period: %.2f ms\n", stats.mean_period_ms);
-                    Serial.printf("  Jitter A: %.3f ms\n", stats.jitter_A_ms);
-                    Serial.printf("  Jitter B: %.3f ms\n", stats.jitter_B_ms);
-                    Serial.printf("  Jitter C: %.3f ms\n", stats.jitter_C_ms);
+                    const auto& stats = advancedAnalyzer.getStats();
+                    Serial.println("\n====== MEASUREMENT STATISTICS ======");
+                    Serial.printf("CPS: %.2f Hz\n", stats.cps_calculated);
+                    Serial.printf("Quality Score: %d%%\n", stats.quality_score);
+                    Serial.printf("Consistency: %.1f%%\n", stats.consistency_percent);
+                    Serial.printf("Waveforms Collected: %d\n", stats.samples_collected);
+                    Serial.printf("Mean Period: %.2f ms\n", stats.mean_period_ms);
+                    Serial.printf("Period Jitter: %.3f ms\n", stats.period_jitter_ms);
                     Serial.println();
+                    Serial.println("====== HARMONIC ANALYSIS ======");
+                    Serial.printf("Mean Harmonic 2/1 Ratio: %.4f\n", stats.mean_harmonic_2_1);
+                    Serial.printf("Mean Harmonic 3/1 Ratio: %.4f\n", stats.mean_harmonic_3_1);
+                    Serial.printf("Harmonic Consistency: %.1f%%\n", stats.harmonic_consistency);
+                    Serial.println();
+                    Serial.println("====== DECAY ANALYSIS ======");
+                    Serial.printf("Mean Decay Rate: %.4f\n", stats.mean_decay_rate);
+                    Serial.printf("Mean Q-Factor: %.2f\n", stats.mean_quality_factor);
+                    Serial.println();
+                    
+                    if (stats.samples_collected > 0) {
+                        const auto& wf = advancedAnalyzer.getLastWaveform();
+                        Serial.println("====== LAST WAVEFORM ======");
+                        Serial.printf("Measurement Points: %d\n", wf.point_count);
+                        Serial.printf("Total Energy: %.2f\n", wf.total_energy);
+                        Serial.printf("Peak Amplitude: %.2f dB\n", wf.peak_amplitude_db);
+                        Serial.printf("Decay Rate: %.4f\n", wf.decay_rate);
+                        Serial.printf("Q-Factor: %.2f\n", wf.quality_factor_q);
+                        Serial.printf("THD: %.1f%%\n", wf.harmonic_content_percent);
+                        Serial.println();
+                        
+                        Serial.println("====== MEASUREMENT POINTS ======");
+                        for (size_t i = 0; i < wf.points.size(); i++) {
+                            const auto& pt = wf.points[i];
+                            const char* type_str = "";
+                            switch (pt.type) {
+                                case AdvancedImpactAnalyzer::BASELINE: type_str = "BASE"; break;
+                                case AdvancedImpactAnalyzer::RISING_EDGE: type_str = "EDGE"; break;
+                                case AdvancedImpactAnalyzer::PEAK: type_str = "PEAK"; break;
+                                case AdvancedImpactAnalyzer::VALLEY: type_str = "VALY"; break;
+                                case AdvancedImpactAnalyzer::END_IMPULSE: type_str = "END"; break;
+                                default: type_str = "????"; break;
+                            }
+                            Serial.printf("%2d. %s T=%6.2fms A=%.4f dB=%6.2f Angle=%.1f\u00b0\n",
+                                         i + 1, type_str, pt.time_ms,
+                                         pt.amplitude_linear, pt.amplitude_db,
+                                         pt.slope_angle_deg);
+                        }
+                    }
+                    Serial.println("\n");
+                }
+                break;
+                
+            case 'd':  // Set microphone distance
+                {
+                    Serial.print("Enter microphone distance (10-500 mm): ");
+                    // Simple serial input (in production, would need full command parsing)
+                    // For now, just show current
+                    float dist, angle;
+                    advancedAnalyzer.getMicrophonePosition(dist, angle);
+                    Serial.printf("Current: %.0f mm\n", dist);
+                }
+                break;
+                
+            case 'a':  // Set microphone angle
+                {
+                    Serial.print("Enter microphone angle (-180 to 180 degrees): ");
+                    float dist, angle;
+                    advancedAnalyzer.getMicrophonePosition(dist, angle);
+                    Serial.printf("Current: %.0f degrees\n", angle);
                 }
                 break;
                 
             case 'h':  // Help
-                Serial.println("\n[HELP] Serial Commands:");
-                Serial.println("  s - START measurement (100 impacts)");
-                Serial.println("  r - Reset analyzer");
-                Serial.println("  c - Calibrate microphone");
-                Serial.println("  + - Increase gain (+5dB)");
-                Serial.println("  - - Decrease gain (-5dB)");
-                Serial.println("  d - Adjust microphone distance");
-                Serial.println("  a - Adjust microphone angle");
-                Serial.println("  i - Print current statistics");
-                Serial.println("  h - Show this help");
+                Serial.println("\n====== COMMAND REFERENCE ======");
+                Serial.println("s      - START new measurement (100 cycles)");
+                Serial.println("r      - RESET analyzer and clear data");
+                Serial.println("c      - CALIBRATE microphone gain");
+                Serial.println("+      - Increase gain by 5dB");
+                Serial.println("-      - Decrease gain by 5dB");
+                Serial.println("i      - Print current statistics");
+                Serial.println("d      - Set microphone distance");
+                Serial.println("a      - Set microphone angle");
+                Serial.println("h      - Show this help");
+                Serial.println();
+                Serial.println("FEATURES:");
+                Serial.println("- Multi-point waveform analysis");
+                Serial.println("- Harmonic ratio analysis (H2/H1, H3/H1)");
+                Serial.println("- Decay rate calculation");
+                Serial.println("- Q-factor measurement");
+                Serial.println("- Jitter analysis per measurement point");
+                Serial.println("- Real-time UI with multiple views");
+                Serial.println("- 0-250 CPS measurement range");
                 Serial.println();
                 break;
                 
