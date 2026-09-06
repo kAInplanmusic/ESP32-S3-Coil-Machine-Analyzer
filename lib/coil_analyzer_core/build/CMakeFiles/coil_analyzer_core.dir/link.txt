@@ -1,2 +1,0 @@
-/usr/bin/ar qc libcoil_analyzer_core.a CMakeFiles/coil_analyzer_core.dir/src/SignalProcessor.cpp.o CMakeFiles/coil_analyzer_core.dir/src/AdvancedImpactAnalyzer.cpp.o CMakeFiles/coil_analyzer_core.dir/src/CalibrationManager.cpp.o
-/usr/bin/ranlib libcoil_analyzer_core.a
