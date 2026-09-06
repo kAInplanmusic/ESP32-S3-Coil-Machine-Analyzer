@@ -2,7 +2,7 @@
   "name": "Coil Machine Analyzer",
   "short_name": "Coil Analyzer",
   "description": "Professional waveform analysis using your microphone",
-  "start_url": "/ESP32-S3-Coil-Machine-Analyzer/",
+  "start_url": "/cpsMONK/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#0066cc",
