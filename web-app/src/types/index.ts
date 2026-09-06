@@ -14,17 +14,16 @@ export interface MeasurementPoint {
 }
 
 export interface MeasurementResult {
-  id: string
-  timestamp: number
+  timestamp: string
   duration: number
-  peakAmplitude: number
-  rmsValue: number
-  fundamentalFrequency: number
-  harmonics: Harmonic[]
-  decayRate: number
-  qualityScore: number
+  rms: number
+  peak: number
+  mean: number
+  frequency: number
+  quality: 'poor' | 'fair' | 'good'
+  sampleCount: number
   waveformData: number[]
-  frequencyData: number[]
+  spectrumData: number[]
 }
 
 export interface Harmonic {

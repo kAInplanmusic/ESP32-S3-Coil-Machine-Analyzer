@@ -1,11 +1,92 @@
 import React from 'react'
+import type { MeasurementResult } from '../types'
 
 interface ResultsPanelProps {
-  result: any
+  result: MeasurementResult
 }
 
 export const ResultsPanel: React.FC<ResultsPanelProps> = ({ result }) => {
-  const [activeTab, setActiveTab] = React.useState<'summary' | 'waveform' | 'harmonics' | 'decay'>('summary')
+  const [activeTab, setActiveTab] = React.useState<'summary' | 'waveform' | 'spectrum'>('summary')
+  const canvasRef = React.useRef<HTMLCanvasElement>(null)
+
+  React.useEffect(() => {
+    if (activeTab === 'waveform' && canvasRef.current && result.waveformData) {
+      drawWaveform()
+    } else if (activeTab === 'spectrum' && canvasRef.current && result.spectrumData) {
+      drawSpectrum()
+    }
+  }, [activeTab, result])
+
+  const drawWaveform = () => {
+    if (!canvasRef.current) return
+    const canvas = canvasRef.current
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    canvas.width = canvas.offsetWidth * window.devicePixelRatio
+    canvas.height = canvas.offsetHeight * window.devicePixelRatio
+    ctx.scale(window.devicePixelRatio, window.devicePixelRatio)
+
+    const width = canvas.offsetWidth
+    const height = canvas.offsetHeight
+    const data = result.waveformData
+
+    ctx.fillStyle = '#ffffff'
+    ctx.fillRect(0, 0, width, height)
+
+    ctx.strokeStyle = '#2196F3'
+    ctx.lineWidth = 2
+    ctx.beginPath()
+
+    const maxValue = Math.max(...data.map(Math.abs), 0.1)
+    const centerY = height / 2
+
+    for (let i = 0; i < data.length; i++) {
+      const x = (i / data.length) * width
+      const y = centerY - (data[i] / maxValue) * (height / 2.5)
+
+      if (i === 0) {
+        ctx.moveTo(x, y)
+      } else {
+        ctx.lineTo(x, y)
+      }
+    }
+    ctx.stroke()
+  }
+
+  const drawSpectrum = () => {
+    if (!canvasRef.current) return
+    const canvas = canvasRef.current
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    canvas.width = canvas.offsetWidth * window.devicePixelRatio
+    canvas.height = canvas.offsetHeight * window.devicePixelRatio
+    ctx.scale(window.devicePixelRatio, window.devicePixelRatio)
+
+    const width = canvas.offsetWidth
+    const height = canvas.offsetHeight
+    const spectrum = result.spectrumData
+
+    ctx.fillStyle = '#ffffff'
+    ctx.fillRect(0, 0, width, height)
+
+    const barWidth = width / spectrum.length
+    const maxMagnitude = Math.max(...spectrum.map(Math.abs), 0.1)
+
+    ctx.fillStyle = '#FF9800'
+    for (let i = 0; i < spectrum.length; i++) {
+      const magnitude = Math.abs(spectrum[i]) / maxMagnitude
+      const barHeight = magnitude * height
+
+      ctx.fillRect(
+        i * barWidth,
+        height - barHeight,
+        barWidth - 1,
+        barHeight
+      )
+    }
+  }
 
   const handleExportJSON = () => {
     const dataStr = JSON.stringify(result, null, 2)
@@ -16,11 +97,48 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ result }) => {
     link.download = `measurement-${Date.now()}.json`
     link.click()
     URL.revokeObjectURL(url)
+
+    // Save to local storage
+    saveToHistory(result)
   }
 
   const handleExportCSV = () => {
-    // TODO: Implement CSV export
-    console.log('CSV export not yet implemented')
+    const csv = [
+      ['Metric', 'Value'],
+      ['Timestamp', result.timestamp],
+      ['Duration (s)', result.duration],
+      ['RMS', result.rms],
+      ['Peak', result.peak],
+      ['Mean', result.mean],
+      ['Frequency (Hz)', result.frequency],
+      ['Quality', result.quality],
+      ['Sample Count', result.sampleCount]
+    ]
+      .map(row => row.join(','))
+      .join('\n')
+
+    const dataBlob = new Blob([csv], { type: 'text/csv' })
+    const url = URL.createObjectURL(dataBlob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `measurement-${Date.now()}.csv`
+    link.click()
+    URL.revokeObjectURL(url)
+
+    saveToHistory(result)
+  }
+
+  const saveToHistory = (measurement: MeasurementResult) => {
+    try {
+      const history = JSON.parse(localStorage.getItem('measurements') || '[]')
+      history.push({
+        ...measurement,
+        id: Date.now()
+      })
+      localStorage.setItem('measurements', JSON.stringify(history.slice(-50))) // Keep last 50
+    } catch (err) {
+      console.error('Failed to save to history:', err)
+    }
   }
 
   return (
@@ -28,8 +146,10 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ result }) => {
       <div className="results-header">
         <h2>Measurement Results</h2>
         <div className="quality-score">
-          <span className="quality-label">Overall Quality:</span>
-          <span className="quality-value">--</span>
+          <span className="quality-label">Quality:</span>
+          <span className={`quality-value quality-${result.quality}`}>
+            {result.quality.toUpperCase()}
+          </span>
         </div>
       </div>
 
@@ -47,16 +167,10 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ result }) => {
           Waveform
         </button>
         <button
-          className={`tab ${activeTab === 'harmonics' ? 'active' : ''}`}
-          onClick={() => setActiveTab('harmonics')}
+          className={`tab ${activeTab === 'spectrum' ? 'active' : ''}`}
+          onClick={() => setActiveTab('spectrum')}
         >
-          Harmonics
-        </button>
-        <button
-          className={`tab ${activeTab === 'decay' ? 'active' : ''}`}
-          onClick={() => setActiveTab('decay')}
-        >
-          Decay Analysis
+          Spectrum
         </button>
       </div>
 
@@ -65,50 +179,55 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ result }) => {
           <div className="summary-tab">
             <div className="metrics-grid">
               <div className="metric">
-                <label>Average CPS</label>
-                <span className="value">--</span>
+                <label>RMS Level</label>
+                <span className="value">{result.rms.toFixed(4)}</span>
               </div>
               <div className="metric">
                 <label>Peak Amplitude</label>
-                <span className="value">--</span>
+                <span className="value">{result.peak.toFixed(4)}</span>
               </div>
               <div className="metric">
-                <label>THD %</label>
-                <span className="value">--</span>
+                <label>Peak Frequency</label>
+                <span className="value">{result.frequency} Hz</span>
               </div>
               <div className="metric">
-                <label>Decay Rate</label>
-                <span className="value">--</span>
+                <label>Duration</label>
+                <span className="value">{result.duration} s</span>
               </div>
+              <div className="metric">
+                <label>Samples</label>
+                <span className="value">{result.sampleCount.toLocaleString()}</span>
+              </div>
+              <div className="metric">
+                <label>Mean Value</label>
+                <span className="value">{result.mean.toFixed(4)}</span>
+              </div>
+            </div>
+            <div className="timestamp">
+              <small>Measured: {new Date(result.timestamp).toLocaleString()}</small>
             </div>
           </div>
         )}
 
         {activeTab === 'waveform' && (
           <div className="waveform-tab">
-            <canvas id="waveform-result-canvas"></canvas>
+            <canvas ref={canvasRef} className="result-canvas"></canvas>
           </div>
         )}
 
-        {activeTab === 'harmonics' && (
-          <div className="harmonics-tab">
-            <canvas id="harmonics-canvas"></canvas>
-          </div>
-        )}
-
-        {activeTab === 'decay' && (
-          <div className="decay-tab">
-            <canvas id="decay-canvas"></canvas>
+        {activeTab === 'spectrum' && (
+          <div className="spectrum-tab">
+            <canvas ref={canvasRef} className="result-canvas"></canvas>
           </div>
         )}
       </div>
 
       <div className="export-section">
         <button onClick={handleExportJSON} className="btn btn-export">
-          Export as JSON
+          📥 Export as JSON
         </button>
         <button onClick={handleExportCSV} className="btn btn-export">
-          Export as CSV
+          📥 Export as CSV
         </button>
       </div>
     </div>
