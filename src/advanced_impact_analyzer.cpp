@@ -45,7 +45,7 @@ void AdvancedImpactAnalyzer::startMeasurement() {
     _stats.measurement_complete = false;
     _stats.quality_score = 0;
     
-    ESP_LOGI(TAG, "Measurement started - collecting 100 impact waveforms...");
+    ESP_LOGI(TAG, "Measurement started - collecting %d impact waveforms...", MEASUREMENT_CYCLES_MODE2);
 }
 
 void AdvancedImpactAnalyzer::processSample(int16_t sample, uint32_t sample_index) {
@@ -78,7 +78,7 @@ void AdvancedImpactAnalyzer::processSample(int16_t sample, uint32_t sample_index
             
             // Extract waveform points
             if (extractWaveformPoints()) {
-                if (_waveforms.size() >= 100) {
+                if (_waveforms.size() >= MEASUREMENT_CYCLES_MODE2) {
                     stopMeasurement();
                 }
             }
@@ -201,7 +201,7 @@ uint16_t AdvancedImpactAnalyzer::getQualityColor() const {
 
 uint8_t AdvancedImpactAnalyzer::getMeasurementProgress() const {
     if (!_measuring) return 0;
-    return (uint8_t)((_waveforms.size() * 100) / 100);
+    return (uint8_t)((_waveforms.size() * 100) / MEASUREMENT_CYCLES_MODE2);
 }
 
 void AdvancedImpactAnalyzer::setMicrophonePosition(float distance_mm, float angle_deg) {

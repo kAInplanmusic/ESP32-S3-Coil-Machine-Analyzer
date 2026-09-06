@@ -93,6 +93,52 @@
 #define DEFAULT_MEASUREMENTS    50      // Default
 
 // ============================================================================
+// MEASUREMENT MODES (cpsMONK Spec)
+// ============================================================================
+// Mode 1: Live-CPS — kontinuierliche CPS-Anzeige, farbcodiert nach Qualität
+// Mode 2: Ø-CPS über 500 Zyklen + Impulsqualität in % über 500 Impulse
+#define MEASUREMENT_CYCLES_MODE2   500  // Zyklen für Modus 2 (Ø-CPS + Qualität)
+#define CPS_WINDOW_SEC_LIVE        1.0f // Gleitendes Fenster für Live-CPS
+
+// Anzeige: NUR CPS, farbcodiert je Qualität — keine Zusatzanzeigen
+#define UI_MINIMAL_MODE         1
+
+// ============================================================================
+// COLOR DEFINITIONS (RGB565) - fehlten bisher (Build-Fix)
+// ============================================================================
+#define COLOR_BLACK             0x0000
+#define COLOR_WHITE             0xFFFF
+#define COLOR_RED               0xF800
+#define COLOR_GREEN             0x07E0
+#define COLOR_BLUE              0x001F
+#define COLOR_YELLOW            0xFFE0
+#define COLOR_CYAN              0x07FF
+#define COLOR_MAGENTA           0xF81F
+#define COLOR_ORANGE            0xFD20
+#define COLOR_GRAY              0x8410
+#define COLOR_LIGHT             0xC618
+#define COLOR_DARK              0x2104
+
+// ============================================================================
+// MISSING MACROS (Build-Fix — wurden referenziert aber nie definiert)
+// ============================================================================
+#define SAMPLE_RATE             AUDIO_SAMPLE_RATE
+#define SERIAL_BAUD_RATE        115200
+#define LOG_SERIAL              DEBUG_SERIAL
+#define FFT_FREQ_RESOLUTION     ((float)AUDIO_SAMPLE_RATE / FFT_SIZE)
+#define CPS_MIN                 MIN_CPS
+#define CPS_MAX                 MAX_CPS
+#define WAVEFORM_HEIGHT         140
+#define SPECTRUM_HEIGHT         120
+#define TFT_BACKLIGHT           TFT_BL
+#define UI_UPDATE_INTERVAL      UI_UPDATE_RATE_MS
+#define AUDIO_TASK_STACK_SIZE   8192
+#define PROCESSING_TASK_STACK   8192
+#define DISPLAY_TASK_STACK_SIZE 4096
+#define MICROPHONE_DISTANCE_MM  100.0f
+#define MICROPHONE_ANGLE_DEG    0.0f
+
+// ============================================================================
 // WAVEFORM ANALYSIS
 // ============================================================================
 #define POINTS_PER_WAVEFORM     20      // Analysis points per impact

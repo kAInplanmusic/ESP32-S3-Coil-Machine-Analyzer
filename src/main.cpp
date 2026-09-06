@@ -27,11 +27,90 @@ uint32_t sample_index = 0;
 
 // Global measurement state
 struct SystemState {
-    float currentCPS = 0.0f;
-    uint8_t qualityScore = 0;
+    float currentCPS = 0.0f;         // Live-CPS (Modus 1) bzw. laufender Ø (Modus 2)
+    uint8_t qualityScore = 0;        // Impulsqualität 0-100% (Modus 2: Ø über 500 Impulse)
     bool isRecording = false;
     unsigned long recordingStartTime = 0;
+    uint8_t measurementMode = 1;     // 1 = Live-CPS, 2 = Ø-CPS @500 + Qualität @500
 } systemState;
+
+/**
+ * Mode 1: Live-CPS — gleitendes 1s-Fenster, farbcodiert
+ * Mode 2: Ø-CPS über 500 Zyklen + Ø-Impulsqualität über 500 Impulse
+ */
+void updateMeasurement() {
+    if (systemState.measurementMode == 2) {
+        // Modus 2: Automatische 500-Zyklen-Messung mit dem Advanced Analyzer
+        if (!advancedAnalyzer.isMeasuring() &&
+            !advancedAnalyzer.getStats().measurement_complete) {
+            advancedAnalyzer.startMeasurement();
+        }
+        if (advancedAnalyzer.isMeasuring()) {
+            systemState.currentCPS = advancedAnalyzer.getCPS();      // Ø-CPS (1000/Ø-Periode)
+            systemState.qualityScore = advancedAnalyzer.getStats().quality_score; // Ø-Impulsqualität %
+        } else if (advancedAnalyzer.getStats().measurement_complete) {
+            // Messung fertig: Werte einfrieren, bis RESET ('r')
+            const auto& stats = advancedAnalyzer.getStats();
+            systemState.currentCPS = stats.cps_calculated;
+            systemState.qualityScore = stats.quality_score;
+        }
+    } else {
+        // Modus 1: Live-CPS über gleitendes Fenster
+        systemState.currentCPS = processor.calculateCPS(CPS_WINDOW_SEC_LIVE);
+        processor.updateQualityScore();
+        systemState.qualityScore = processor.getQualityScore();
+    }
+}
+
+/**
+ * Farbcode je Impulsqualität (0-100):
+ * >=86 Grün, 75-85 Gelb, 61-74 Orange, <61 Rot
+ */
+uint16_t qualityToColor(uint8_t q) {
+    if (q >= 86) return COLOR_GREEN;
+    if (q >= 75) return COLOR_YELLOW;
+    if (q >= 61) return COLOR_ORANGE;
+    return COLOR_RED;
+}
+
+/**
+ * MINIMAL-UI: Nur CPS groß in Qualitätsfarbe, sonst nichts.
+ * Modus 2 zusätzlich klein die Qualität in % in derselben Farbe.
+ */
+void drawMinimalUI() {
+    static uint32_t last_draw = 0;
+    static float last_cps = -1.0f;
+    static uint8_t last_q = 255;
+
+    uint32_t now = millis();
+    if (now - last_draw < 200) return;  // 5 Hz reicht
+    // Redraw nur bei Änderung
+    if (systemState.currentCPS == last_cps && systemState.qualityScore == last_q) return;
+    last_cps = systemState.currentCPS;
+    last_q = systemState.qualityScore;
+    last_draw = now;
+
+    display.clear();
+    uint16_t color = qualityToColor(systemState.qualityScore);
+
+    // CPS riesig, zentriert, in Qualitätsfarbe — einzige Anzeige
+    display.setTextSize(6);
+    display.setTextColor(color, COLOR_BLACK);
+    display.setCursor(20, 100);
+    display.printf("%5.1f", systemState.currentCPS);
+
+    display.setTextSize(2);
+    display.setCursor(20, 170);
+    display.setTextColor(color, COLOR_BLACK);
+    display.print("CPS");
+
+    // Modus 2: Qualität in % klein darunter (gleiche Farbe), sonst nichts
+    if (systemState.measurementMode == 2) {
+        display.setTextSize(3);
+        display.setCursor(20, 220);
+        display.printf("%3d%%", systemState.qualityScore);
+    }
+}
 
 /**
  * Task: Audio capture from I2S microphone
@@ -74,39 +153,21 @@ void measurementTask(void* pvParameters) {
     ESP_LOGI(TAG, "Measurement task started on Core 1");
     
     while (1) {
-        // Get current state from advanced analyzer
-        if (advancedAnalyzer.isMeasuring()) {
-            systemState.currentCPS = advancedAnalyzer.getCPS();
-            const auto& stats = advancedAnalyzer.getStats();
-            systemState.qualityScore = stats.quality_score;
-        } else {
-            systemState.currentCPS = processor.calculateCPS(2.0f);
-            processor.updateQualityScore();
-            systemState.qualityScore = processor.getQualityScore();
-        }
+        updateMeasurement();
         
         // Log to serial (debug)
-        if (LOG_SERIAL && advancedAnalyzer.isMeasuring()) {
+        if (LOG_SERIAL) {
             static unsigned long last_log = 0;
             if (millis() - last_log > 2000) {
-                const auto& stats = advancedAnalyzer.getStats();
-                Serial.printf("[MEASURE] CPS: %.2f | Quality: %d%% | Progress: %d%% | Waveforms: %d\n",
+                Serial.printf("[MEASURE] Mode %d | CPS: %.2f | Quality: %d%%\n",
+                             systemState.measurementMode,
                              systemState.currentCPS,
-                             systemState.qualityScore,
-                             advancedAnalyzer.getMeasurementProgress(),
-                             stats.samples_collected);
-                
-                if (stats.samples_collected > 0) {
-                    Serial.printf("          Mean H2/H1: %.2f | Mean H3/H1: %.2f | Decay: %.4f\n",
-                                 stats.mean_harmonic_2_1,
-                                 stats.mean_harmonic_3_1,
-                                 stats.mean_decay_rate);
-                }
+                             systemState.qualityScore);
                 last_log = millis();
             }
         }
         
-        vTaskDelay(pdMS_TO_TICKS(500));
+        vTaskDelay(pdMS_TO_TICKS(200));
     }
 }
 
@@ -118,7 +179,11 @@ void displayUpdateTask(void* pvParameters) {
     ESP_LOGI(TAG, "Display update task started on Core 1");
     
     while (1) {
+#if UI_MINIMAL_MODE
+        drawMinimalUI();
+#else
         advancedUI.update();
+#endif
         vTaskDelay(pdMS_TO_TICKS(UI_UPDATE_INTERVAL));
     }
 }
@@ -268,16 +333,31 @@ void loop() {
         char cmd = Serial.read();
         
         switch (cmd) {
-            case 's':  // START measurement
-                Serial.println("[CMD] START - Beginning 100-cycle measurement...");
+            case 's':  // START measurement (Modus 2)
+                Serial.println("[CMD] START - Mode 2: 500-cycle measurement...");
+                systemState.measurementMode = 2;
+                advancedAnalyzer.reset();
                 advancedAnalyzer.startMeasurement();
-                advancedUI.setState(AdvancedMeasurementUI::STATE_MEASURING);
+                break;
+
+            case '1':  // MODE 1: Live-CPS
+                Serial.println("[CMD] MODE 1 - Live-CPS (continuous)");
+                advancedAnalyzer.reset();
+                systemState.measurementMode = 1;
+                break;
+
+            case '2':  // MODE 2: Ø-CPS @500 + Qualität @500
+                Serial.println("[CMD] MODE 2 - Ø-CPS over 500 cycles + impulse quality %");
+                systemState.measurementMode = 2;
+                advancedAnalyzer.reset();
+                advancedAnalyzer.startMeasurement();
                 break;
                 
             case 'r':  // RESET
                 Serial.println("[CMD] RESET - Clearing all data...");
                 advancedAnalyzer.reset();
-                advancedUI.setState(AdvancedMeasurementUI::STATE_IDLE);
+                systemState.currentCPS = 0;
+                systemState.qualityScore = 0;
                 break;
                 
             case 'c':  // CALIBRATE
@@ -378,7 +458,9 @@ void loop() {
                 
             case 'h':  // Help
                 Serial.println("\n====== COMMAND REFERENCE ======");
-                Serial.println("s      - START new measurement (100 cycles)");
+                Serial.println("1      - MODE 1: Live-CPS (continuous, color-coded)");
+                Serial.println("2      - MODE 2: Ø-CPS @500 cycles + quality % @500 impulses");
+                Serial.println("s      - START Mode-2 measurement (500 cycles)");
                 Serial.println("r      - RESET analyzer and clear data");
                 Serial.println("c      - CALIBRATE microphone gain");
                 Serial.println("+      - Increase gain by 5dB");
@@ -388,14 +470,9 @@ void loop() {
                 Serial.println("a      - Set microphone angle");
                 Serial.println("h      - Show this help");
                 Serial.println();
-                Serial.println("FEATURES:");
-                Serial.println("- Multi-point waveform analysis");
-                Serial.println("- Harmonic ratio analysis (H2/H1, H3/H1)");
-                Serial.println("- Decay rate calculation");
-                Serial.println("- Q-factor measurement");
-                Serial.println("- Jitter analysis per measurement point");
-                Serial.println("- Real-time UI with multiple views");
-                Serial.println("- 0-250 CPS measurement range");
+                Serial.println("DISPLAY: CPS only, color = quality");
+                Serial.println("  >=86% GREEN | 75-85% YELLOW | 61-74% ORANGE | <61% RED");
+                Serial.println("MODE 2 adds: quality % below CPS (same color)");
                 Serial.println();
                 break;
                 
