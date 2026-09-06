@@ -6,10 +6,9 @@
 export class AudioCapture {
   private audioContext: AudioContext | null = null
   private mediaStream: MediaStream | null = null
-  private analyser: AnalyserNode | null = null
   private scriptProcessor: ScriptProcessorNode | null = null
   private isRecording = false
-  private audioBuffer: Int16Array[] = []
+  private audioBuffer: Float32Array[] = []
 
   /**
    * Check if microphone is available and request permission
@@ -40,26 +39,22 @@ export class AudioCapture {
       // Get microphone stream
       this.mediaStream = await navigator.mediaDevices.getUserMedia({
         audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: false
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false,
+          sampleRate: { ideal: 44100 }
         }
       })
 
       const source = this.audioContext.createMediaStreamSource(this.mediaStream)
 
-      // Create analyser node
-      this.analyser = this.audioContext.createAnalyser()
-      this.analyser.fftSize = 2048
-
-      // Create script processor
+      // Create script processor (deprecated but still widely supported)
       this.scriptProcessor = this.audioContext.createScriptProcessor(4096, 1, 1)
       this.scriptProcessor.onaudioprocess = this.handleAudioProcess_.bind(this)
 
       // Connect nodes
       source.connect(this.scriptProcessor)
-      this.scriptProcessor.connect(this.analyser)
-      this.analyser.connect(this.audioContext.destination)
+      this.scriptProcessor.connect(this.audioContext.destination)
 
       this.isRecording = true
       this.audioBuffer = []
@@ -97,20 +92,8 @@ export class AudioCapture {
     if (!this.isRecording) return
 
     const inputData = event.inputBuffer.getChannelData(0)
-    const pcmData = this.floatTo16BitPCM_(inputData)
-    this.audioBuffer.push(pcmData)
-  }
-
-  /**
-   * Convert 32-bit float to 16-bit PCM
-   */
-  private floatTo16BitPCM_(floatArray: Float32Array): Int16Array {
-    const pcm = new Int16Array(floatArray.length)
-    for (let i = 0; i < floatArray.length; i++) {
-      const s = Math.max(-1, Math.min(1, floatArray[i]))
-      pcm[i] = s < 0 ? s * 0x8000 : s * 0x7fff
-    }
-    return pcm
+    // Store a copy of the float data
+    this.audioBuffer.push(new Float32Array(inputData))
   }
 
   /**
@@ -119,7 +102,7 @@ export class AudioCapture {
   private processAudio_(): any {
     // Combine all audio buffers
     const totalLength = this.audioBuffer.reduce((sum, buf) => sum + buf.length, 0)
-    const combinedBuffer = new Int16Array(totalLength)
+    const combinedBuffer = new Float32Array(totalLength)
     
     let offset = 0
     for (const buffer of this.audioBuffer) {
@@ -143,14 +126,14 @@ export class AudioCapture {
     if (this.scriptProcessor) {
       this.scriptProcessor.disconnect()
     }
-    if (this.analyser) {
-      this.analyser.disconnect()
-    }
     if (this.audioContext && this.audioContext.state !== 'closed') {
-      this.audioContext.close()
+      try {
+        this.audioContext.close()
+      } catch (e) {
+        // Ignore close errors
+      }
     }
     this.audioContext = null
-    this.analyser = null
     this.scriptProcessor = null
     this.mediaStream = null
   }
