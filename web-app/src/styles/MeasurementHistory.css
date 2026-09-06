@@ -1,0 +1,149 @@
+/* Measurement History Styles */
+.measurement-history {
+  background: white;
+  border-radius: 8px;
+  padding: 2rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.measurement-history h2 {
+  color: #0066cc;
+  margin-bottom: 1.5rem;
+  font-size: 1.5rem;
+}
+
+.empty-message {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: #6c757d;
+  font-size: 1.1rem;
+}
+
+.history-controls {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 2rem;
+  flex-wrap: wrap;
+}
+
+.history-controls .btn {
+  flex: 1;
+  min-width: 150px;
+}
+
+.measurements-table-wrapper {
+  overflow-x: auto;
+}
+
+.measurements-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+
+.measurements-table th {
+  background: linear-gradient(135deg, #0066cc 0%, #0052a3 100%);
+  color: white;
+  padding: 1rem;
+  text-align: left;
+  font-weight: 600;
+  position: sticky;
+  top: 0;
+}
+
+.measurements-table td {
+  padding: 1rem;
+  border-bottom: 1px solid #dee2e6;
+  vertical-align: middle;
+}
+
+.measurements-table tbody tr {
+  transition: background 0.2s ease;
+}
+
+.measurements-table tbody tr:hover {
+  background: #f8f9fa;
+}
+
+.measurements-table tbody tr:nth-child(even) {
+  background: #f8f9fa;
+}
+
+.quality-badge {
+  display: inline-block;
+}
+
+.quality-badge span {
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+.quality-high {
+  background: #d4edda;
+  color: #155724;
+  border: 1px solid #c3e6cb;
+}
+
+.quality-medium {
+  background: #fff3cd;
+  color: #856404;
+  border: 1px solid #ffeeba;
+}
+
+.quality-low {
+  background: #f8d7da;
+  color: #721c24;
+  border: 1px solid #f5c6cb;
+}
+
+.btn-small {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.85rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: #e9ecef;
+  color: #6c757d;
+}
+
+.btn-small:hover {
+  transform: scale(1.1);
+  background: #dee2e6;
+}
+
+.btn-small.btn-danger {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.btn-small.btn-danger:hover {
+  background: #f5c6cb;
+  color: #721c24;
+}
+
+@media (max-width: 768px) {
+  .measurement-history {
+    padding: 1.5rem;
+  }
+
+  .measurements-table {
+    font-size: 0.85rem;
+  }
+
+  .measurements-table th,
+  .measurements-table td {
+    padding: 0.75rem 0.5rem;
+  }
+
+  .history-controls {
+    flex-direction: column;
+  }
+
+  .history-controls .btn {
+    min-width: auto;
+  }
+}

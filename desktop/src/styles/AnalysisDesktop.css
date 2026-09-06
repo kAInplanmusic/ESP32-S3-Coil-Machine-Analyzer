@@ -1,0 +1,112 @@
+/* Analysis Page Styles */
+.analysis-page {
+  display: flex;
+  flex-direction: column;
+}
+
+.analysis-header {
+  margin-bottom: 32px;
+}
+
+.analysis-header h1 {
+  font-size: 32px;
+  margin-bottom: 8px;
+}
+
+.analysis-header p {
+  color: #666;
+  font-size: 14px;
+}
+
+.analysis-content {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.analysis-section {
+  background: white;
+  border-radius: 8px;
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+body.dark-mode .analysis-section {
+  background: #2a2a2a;
+}
+
+.analysis-section h2 {
+  font-size: 18px;
+  margin-bottom: 16px;
+  color: #2196f3;
+  border-bottom: 2px solid #2196f3;
+  padding-bottom: 8px;
+}
+
+.parameter-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.parameter-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.parameter-item label {
+  font-size: 12px;
+  color: #666;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.parameter-item value {
+  font-size: 20px;
+  font-weight: bold;
+  color: #2196f3;
+}
+
+.parameter-item value.good {
+  color: #4caf50;
+}
+
+.parameter-item value.warning {
+  color: #ffc107;
+}
+
+.parameter-item value.danger {
+  color: #f44336;
+}
+
+.analysis-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 24px;
+  flex-wrap: wrap;
+}
+
+.analysis-actions .btn {
+  flex: 1;
+  min-width: 150px;
+}
+
+@media (max-width: 768px) {
+  .analysis-header {
+    margin-bottom: 16px;
+  }
+
+  .analysis-section {
+    padding: 16px;
+  }
+
+  .parameter-grid {
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  }
+
+  .analysis-actions .btn {
+    min-width: 100px;
+  }
+}

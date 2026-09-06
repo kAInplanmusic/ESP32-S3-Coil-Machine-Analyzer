@@ -1,0 +1,79 @@
+{
+  "name": "coil-analyzer-desktop",
+  "version": "1.0.0",
+  "description": "Desktop Coil Machine Analyzer (Windows/Linux)",
+  "main": "dist/main/main.js",
+  "homepage": "./",
+  "scripts": {
+    "react-start": "react-scripts start",
+    "react-build": "react-scripts build",
+    "react-test": "react-scripts test",
+    "react-eject": "react-scripts eject",
+    "electron-start": "wait-on http://localhost:3000 && electron .",
+    "dev": "concurrently \"npm run react-start\" \"wait-on http://localhost:3000 && electron .\"",
+    "build": "npm run react-build && node build-main.js && electron-builder",
+    "build-win": "npm run react-build && node build-main.js && electron-builder -w",
+    "build-linux": "npm run react-build && node build-main.js && electron-builder -l",
+    "eject": "react-scripts eject"
+  },
+  "author": "Coil Machine Analyzer Team",
+  "license": "MIT",
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "concurrently": "^8.0.0",
+    "electron": "^41.10.3",
+    "electron-builder": "^24.0.0",
+    "wait-on": "^7.0.0",
+    "react-scripts": "5.0.0",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0"
+  },
+  "build": {
+    "appId": "com.coil-analyzer.desktop",
+    "productName": "Coil Machine Analyzer",
+    "files": [
+      "build/",
+      "node_modules/",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  }
+}

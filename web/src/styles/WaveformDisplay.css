@@ -1,0 +1,30 @@
+.waveform-display {
+  background: var(--bg-color);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin: 2rem 0;
+  box-shadow: var(--shadow);
+}
+
+.waveform-display h4 {
+  margin-bottom: 1rem;
+  color: var(--primary-color);
+}
+
+.waveform-display canvas {
+  width: 100%;
+  height: auto;
+  max-width: 100%;
+}
+
+.waveform-info {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border-color);
+}
+
+.waveform-info p {
+  margin: 0.5rem 0;
+  font-size: 0.9rem;
+}

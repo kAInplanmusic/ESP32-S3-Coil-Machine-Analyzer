@@ -1,0 +1,77 @@
+.history-page {
+  width: 100%;
+}
+
+.empty-message {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: #999;
+  font-size: 1.1rem;
+}
+
+.measurements-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--bg-color);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+
+.measurements-table thead {
+  background: var(--primary-color);
+  color: white;
+}
+
+.measurements-table th {
+  padding: 1rem;
+  text-align: left;
+  font-weight: 600;
+}
+
+.measurements-table td {
+  padding: 1rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.measurements-table tbody tr:hover {
+  background: rgba(33, 150, 243, 0.05);
+}
+
+.quality-badge {
+  display: inline-block;
+  padding: 0.4rem 0.8rem;
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.quality-good {
+  background: #c8e6c9;
+  color: #2e7d32;
+}
+
+.quality-fair {
+  background: #fff9c4;
+  color: #f57f17;
+}
+
+.actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+@media (max-width: 768px) {
+  .measurements-table {
+    font-size: 0.9rem;
+  }
+
+  .measurements-table th,
+  .measurements-table td {
+    padding: 0.75rem 0.5rem;
+  }
+
+  .actions {
+    flex-direction: column;
+  }
+}

@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_PATH=/app/data/measurements.db
+      - LOG_LEVEL=info
+      - PORT=3001
+      - ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3000
+    volumes:
+      - backend-data:/app/data
+      - backend-logs:/app/logs
+    depends_on:
+      - postgres
+    networks:
+      - coil-analyzer
+
+  postgres:
+    image: postgres:15-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=coil_analyzer
+      - POSTGRES_PASSWORD=secure_password
+      - POSTGRES_DB=coil_measurements
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - coil-analyzer
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://localhost:3001/api/v1
+      - VITE_WS_URL=ws://localhost:3001/ws
+    depends_on:
+      - backend
+    networks:
+      - coil-analyzer
+
+volumes:
+  backend-data:
+  backend-logs:
+  postgres-data:
+
+networks:
+  coil-analyzer:
+    driver: bridge
